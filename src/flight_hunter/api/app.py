@@ -38,6 +38,7 @@ from flight_hunter.application.live_observations import BrowserSourceCatalog, Gr
 from flight_hunter.application.price_sources import PriceSource, PriceSourceCatalog
 from flight_hunter.application.provider_registry import ProviderRegistry, ProviderStatus
 from flight_hunter.application.search_service import DemoSearchService, SearchRequest, SearchResult
+from flight_hunter.application.source_contracts import SourceContractCatalog, SourceReadiness
 from flight_hunter.application.watch_service import CreateWatchCommand, WatchService
 from flight_hunter.config import AppSettings, load_env_file
 from flight_hunter.domain.money import Money
@@ -119,6 +120,39 @@ class PriceSourceResponse(BaseModel):
 class PriceSourcesResponse(BaseModel):
     strategy: str
     sources: list[PriceSourceResponse]
+
+
+class SourceContractResponse(BaseModel):
+    source_id: str
+    display_name: str
+    stage: str
+    adapter_module: str | None
+    contract_file: str
+    terms_url: str
+    required_env: list[str]
+    operations: list[str]
+    invariants: list[str]
+    notes: str
+    enabled: bool
+    credentials_present: bool
+    access_approved: bool
+    data_kind: str
+    merge_scope: str
+    background_requests_allowed: bool
+    user_action_required: bool
+    blocked_reasons: list[str]
+
+
+class SourceContractSummaryResponse(BaseModel):
+    total: int
+    implemented: int
+    policy_skeleton: int
+    contract_only: int
+
+
+class SourceContractsResponse(BaseModel):
+    summary: SourceContractSummaryResponse
+    sources: list[SourceContractResponse]
 
 
 class BrowserSourceResponse(BaseModel):
@@ -432,6 +466,7 @@ def create_app(
     date_matrix_planner = DateMatrixPlanner()
     intent_adapter = agent_intent_adapter or _agent_intent_adapter(settings)
     price_source_catalog = PriceSourceCatalog.default()
+    source_contract_catalog = SourceContractCatalog.default(settings=settings, registry=registry)
     browser_source_catalog = BrowserSourceCatalog.demo(
         enabled=settings.scraping_observer_enabled,
         clock=lambda: datetime.now(UTC),
@@ -472,6 +507,14 @@ def create_app(
         return PriceSourcesResponse(
             strategy="external_clickout",
             sources=[_price_source_response(source) for source in price_source_catalog.sources],
+        )
+
+    @app.get("/api/v1/source-contracts", response_model=SourceContractsResponse)
+    def source_contracts() -> SourceContractsResponse:
+        sources = source_contract_catalog.readiness()
+        return SourceContractsResponse(
+            summary=_source_contract_summary_response(sources),
+            sources=[_source_contract_response(source) for source in sources],
         )
 
     @app.get("/api/v1/browser-sources", response_model=BrowserSourcesResponse)
@@ -998,6 +1041,40 @@ def _price_source_response(source: PriceSource) -> PriceSourceResponse:
         requires_manual_confirmation=source.requires_manual_confirmation,
         setup_required_ru=source.setup_required_ru,
         notes_ru=source.notes_ru,
+    )
+
+
+def _source_contract_summary_response(
+    sources: tuple[SourceReadiness, ...],
+) -> SourceContractSummaryResponse:
+    return SourceContractSummaryResponse(
+        total=len(sources),
+        implemented=sum(1 for source in sources if source.stage.value == "implemented"),
+        policy_skeleton=sum(1 for source in sources if source.stage.value == "policy_skeleton"),
+        contract_only=sum(1 for source in sources if source.stage.value == "contract_only"),
+    )
+
+
+def _source_contract_response(source: SourceReadiness) -> SourceContractResponse:
+    return SourceContractResponse(
+        source_id=source.source_id,
+        display_name=source.display_name,
+        stage=source.stage.value,
+        adapter_module=source.adapter_module,
+        contract_file=source.contract_file,
+        terms_url=source.terms_url,
+        required_env=list(source.required_env),
+        operations=list(source.operations),
+        invariants=list(source.invariants),
+        notes=source.notes,
+        enabled=source.enabled,
+        credentials_present=source.credentials_present,
+        access_approved=source.access_approved,
+        data_kind=source.data_kind,
+        merge_scope=source.merge_scope,
+        background_requests_allowed=source.background_requests_allowed,
+        user_action_required=source.user_action_required,
+        blocked_reasons=list(source.blocked_reasons),
     )
 
 

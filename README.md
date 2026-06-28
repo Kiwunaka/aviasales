@@ -28,6 +28,9 @@
 - demo search через `FakeFlightProvider`;
 - Aviasales Data adapter, включаемый через `.env`;
 - список providers и причины, почему реальные sources выключены;
+- source contract catalog `GET /api/v1/source-contracts`: показывает readiness каждого источника
+  (`implemented`, `policy_skeleton`, `contract_only`), env flags, adapter module, policy
+  invariants и blocked reasons без раскрытия secrets;
 - airport autocomplete, city-name search и nearby airports: demo-набор работает сразу,
   SQLite-compatible OurAirports import доступен через локальный CSV;
 - flexible date matrix без provider calls;
@@ -114,7 +117,7 @@ uv run flight-hunter-import-airports --airports-csv .\data\airports.csv
 Последний проверенный результат:
 
 ```text
-153 passed
+168 passed
 ruff format/check passed
 mypy passed
 migration upgraded through 0006
@@ -122,8 +125,10 @@ migration upgraded through 0006
 
 ## Что пока не готово
 
-Пока нет полноценного PWA/Next.js UI, Telegram delivery queue, worker process, Docker Compose production stack и большинства реальных provider adapters.
-Реализован только первый реальный provider adapter: Aviasales Data API, с cached-семантикой и выключением по умолчанию.
+Пока нет полноценного PWA/Next.js UI, Telegram delivery queue, worker process, Docker Compose production stack и большинства live/bookable provider adapters.
+Реализован первый реальный provider adapter: Aviasales Data API, с cached-семантикой и выключением по умолчанию.
+Остальные источники теперь явно отражены в source contract catalog как `policy_skeleton` или
+`contract_only`, а не замаскированы под рабочие интеграции.
 
 Scraping, CAPTCHA bypass, stealth, fingerprint spoofing и rotating proxies не используются.
 

@@ -1064,6 +1064,47 @@ Official Travelpayouts docs checked -> Aviasales Data/Search contract notes reco
     - `uv run mypy` -> Success: no issues found in 56 source files.
     - `uv run alembic upgrade head` -> current SQLite migration head verified.
 
+## Current slice: Provider source contract catalog
+
+- Goal: make the source/provider layer visible and testable instead of looking like a set of
+  disabled stubs.
+- Result: implemented for this slice. The full product is not complete.
+- Plan:
+  1. [done] Verify GitHub remote branch visibility and current provider/source code.
+  2. [done] Add tests for source contract readiness, implemented Aviasales Data, provider-isolated
+     Aviasales Search, and contract-only live/bookable providers.
+  3. [done] Implement `SourceContractCatalog` and `GET /api/v1/source-contracts`.
+  4. [done] Run full quality gate and push the follow-up commit.
+- Files/modules:
+  - `src/flight_hunter/application/source_contracts.py`
+  - `src/flight_hunter/api/app.py`
+  - `tests/unit/application/test_source_contracts.py`
+  - `tests/unit/api/test_source_contracts_api.py`
+  - `docs/adr/0025-provider-source-contract-catalog.md`
+  - `README.md`
+- ADR:
+  - `docs/adr/0025-provider-source-contract-catalog.md`
+- Risks:
+  - This is a readiness/contract map, not new live provider traffic.
+  - Skyscanner, Duffel and Aviasales Search remain intentionally unavailable until approved access,
+    current docs verification, fixtures and adapters exist.
+  - GitHub remote is populated and `origin/HEAD` points to `main`, but repository metadata such as
+    description/topics is outside the local code commit.
+- Verification:
+  - GitHub remote check: `origin/HEAD` -> `refs/heads/main`; remote `main` at
+    `ae2de8b94079f7b6d8fc8c1c03fff84ddf145043` before this slice.
+  - Web check: `https://github.com/Kiwunaka/aviasales` renders repository files, README and
+    `1 Commit`.
+  - RED: `uv run pytest tests/unit/application/test_source_contracts.py
+    tests/unit/api/test_source_contracts_api.py -q` -> failed with missing
+    `flight_hunter.application.source_contracts`.
+  - GREEN targeted: same command -> 6 passed.
+  - `uv run pytest tests/unit --quiet` -> 168 passed.
+  - `uv run ruff format --check .` -> 123 files already formatted.
+  - `uv run ruff check .` -> All checks passed.
+  - `uv run mypy` -> Success: no issues found in 58 source files.
+  - `uv run alembic upgrade head` -> current SQLite migration head verified.
+
 ## Current slice: Git publication preparation
 
 - Goal: prepare the existing workspace for safe Git upload without adding product behavior.
