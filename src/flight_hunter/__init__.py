@@ -1,0 +1,1 @@
+"""Flight Hunter core package."""
