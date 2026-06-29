@@ -6,6 +6,7 @@
 .codex-runtime/
 .playwright-mcp/
 .run/
+.local/
 __pycache__/
 *.py[cod]
 *.egg-info/

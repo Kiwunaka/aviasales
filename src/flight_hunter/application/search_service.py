@@ -11,7 +11,14 @@ from flight_hunter.application.search_planner import SearchPlanner
 from flight_hunter.domain.offers import FlightOffer, SearchIntent
 from flight_hunter.domain.policy import ExecutionContext, MergeScope
 from flight_hunter.domain.ranking import OfferRanker, offer_ranking_key
+from flight_hunter.domain.search_results import (
+    BrowserObservedOffer,
+    DealCandidate,
+    ExternalSearchLink,
+    FreshnessSummary,
+)
 from flight_hunter.providers.fake import FakeFlightProvider
+from flight_hunter.providers.ru_clickout import RuClickoutLinkBuilder, default_ru_aggregator_specs
 
 
 class SearchProvider(Protocol):
@@ -49,10 +56,16 @@ class ProviderDenial:
 @dataclass(frozen=True, slots=True)
 class SearchResult:
     search_id: str
+    priced_offers: tuple[FlightOffer, ...]
     mergeable_offers: tuple[FlightOffer, ...]
     provider_isolated_offers: tuple[FlightOffer, ...]
+    browser_observed_offers: tuple[BrowserObservedOffer, ...]
+    external_links: tuple[ExternalSearchLink, ...]
+    deal_candidates: tuple[DealCandidate, ...]
     ranking_reasons: dict[str, tuple[str, ...]]
     denied_providers: dict[str, ProviderDenial]
+    warnings: tuple[str, ...]
+    freshness_summary: FreshnessSummary
 
 
 class DemoSearchService:
@@ -62,6 +75,8 @@ class DemoSearchService:
         registry: ProviderRegistry,
         clock: Callable[[], datetime] | None = None,
         providers: Mapping[str, SearchProvider] | None = None,
+        link_builder: RuClickoutLinkBuilder | None = None,
+        enabled_external_source_ids: tuple[str, ...] | None = None,
     ) -> None:
         self._registry = registry
         self._clock = clock or (lambda: datetime.now(UTC))
@@ -71,6 +86,8 @@ class DemoSearchService:
         self._providers: dict[str, SearchProvider] = {"fake": self._fake_provider}
         if providers is not None:
             self._providers.update(providers)
+        self._link_builder = link_builder or RuClickoutLinkBuilder(default_ru_aggregator_specs())
+        self._enabled_external_source_ids = enabled_external_source_ids
 
     def search(self, request: SearchRequest) -> SearchResult:
         intent = SearchIntent(
@@ -117,14 +134,30 @@ class DemoSearchService:
                 provider_isolated.extend(offers)
 
         ranked_mergeable = self._ranker.rank(tuple(mergeable))
+        priced_offers = tuple(item.offer for item in ranked_mergeable)
+        external_links = self._link_builder.build_all(
+            intent,
+            enabled_source_ids=self._enabled_external_source_ids,
+        )
+        warnings = _warnings_for_result(external_links)
         return SearchResult(
             search_id=request_fingerprint,
-            mergeable_offers=tuple(item.offer for item in ranked_mergeable),
+            priced_offers=priced_offers,
+            mergeable_offers=priced_offers,
             provider_isolated_offers=tuple(provider_isolated),
+            browser_observed_offers=(),
+            external_links=external_links,
+            deal_candidates=(),
             ranking_reasons={
                 offer_ranking_key(item.offer): item.reasons for item in ranked_mergeable
             },
             denied_providers=denied,
+            warnings=warnings,
+            freshness_summary=_freshness_summary(
+                priced_offers=priced_offers,
+                browser_observed_offers=(),
+                external_links=external_links,
+            ),
         )
 
     @staticmethod
@@ -146,3 +179,31 @@ class DemoSearchService:
             )
         )
         return "sha256:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _warnings_for_result(external_links: tuple[ExternalSearchLink, ...]) -> tuple[str, ...]:
+    warnings: list[str] = []
+    if external_links:
+        warnings.append("external_links_are_not_prices")
+    link_warnings = sorted({warning for link in external_links for warning in link.warnings})
+    warnings.extend(link_warnings)
+    return tuple(warnings)
+
+
+def _freshness_summary(
+    *,
+    priced_offers: tuple[FlightOffer, ...],
+    browser_observed_offers: tuple[BrowserObservedOffer, ...],
+    external_links: tuple[ExternalSearchLink, ...],
+) -> FreshnessSummary:
+    observed_times = [offer.observed_at for offer in priced_offers]
+    observed_times.extend(offer.observed_at for offer in browser_observed_offers)
+    return FreshnessSummary(
+        best_price_source=priced_offers[0].provider_id if priced_offers else None,
+        freshest_observation_at=max(observed_times) if observed_times else None,
+        needs_external_confirmation=(
+            any(offer.requires_live_confirmation for offer in priced_offers)
+            or any(offer.requires_external_confirmation for offer in browser_observed_offers)
+            or any(link.requires_external_confirmation for link in external_links)
+        ),
+    )

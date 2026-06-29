@@ -14,10 +14,14 @@ _ISO_CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 
 class Freshness(StrEnum):
     LIVE_OBSERVED = "live_observed"
+    USER_CONFIRMED = "user_confirmed"
+    BROWSER_OBSERVED = "browser_observed"
+    API_CACHED = "api_cached"
     LIVE = "live"
     RECENT = "recent"
     CACHED = "cached"
     STALE = "stale"
+    UNKNOWN_EXTERNAL = "unknown_external"
 
 
 class TripType(StrEnum):

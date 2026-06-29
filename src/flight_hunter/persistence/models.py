@@ -115,6 +115,44 @@ live_observation_idempotency_table = Table(
 )
 
 
+browser_observed_offers_table = Table(
+    "browser_observed_offers",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("household_id", String(36), nullable=False, index=True),
+    Column("user_id", String(36), nullable=False, index=True),
+    Column("search_id", String(160), nullable=False, index=True),
+    Column("source_id", String(80), nullable=False, index=True),
+    Column("source_name", String(120), nullable=False),
+    Column("provider_offer_id", String(160), nullable=False),
+    Column("origin", String(3), nullable=False),
+    Column("destination", String(3), nullable=False),
+    Column("departure_date", String(10), nullable=True),
+    Column("return_date", String(10), nullable=True),
+    Column("amount_minor", Integer, nullable=True),
+    Column("currency", String(3), nullable=True),
+    Column("passengers", Integer, nullable=False),
+    Column("observed_at", DateTime(timezone=True), nullable=False),
+    Column("final_url", String(1000), nullable=False),
+    Column("display_url", String(240), nullable=False),
+    Column("freshness", String(40), nullable=False),
+    Column("confidence", String(20), nullable=False),
+    Column("parser_version", String(120), nullable=False),
+    Column("parser_warnings_json", String(1000), nullable=False),
+    Column("airline_name", String(160), nullable=True),
+    Column("airline_iata", String(3), nullable=True),
+    Column("flight_number", String(40), nullable=True),
+    Column("departure_time_local", String(40), nullable=True),
+    Column("arrival_time_local", String(40), nullable=True),
+    Column("duration_minutes", Integer, nullable=True),
+    Column("stops", Integer, nullable=True),
+    Column("baggage_summary", String(240), nullable=True),
+    Column("seller_name", String(160), nullable=True),
+    Column("requires_external_confirmation", Boolean, nullable=False),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+)
+
+
 telegram_update_dedupe_table = Table(
     "telegram_update_dedupe",
     metadata,

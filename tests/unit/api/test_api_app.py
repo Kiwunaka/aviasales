@@ -48,6 +48,18 @@ def test_search_endpoint_returns_demo_cached_result_and_provider_denials() -> No
 
     assert response.status_code == 201
     body = response.json()
+    assert body["priced_offers"] == body["offers"]
+    assert body["browser_observed_offers"] == []
+    assert body["deal_candidates"] == []
+    assert body["freshness_summary"]["needs_external_confirmation"] is True
+    assert body["freshness_summary"]["best_price_source"] == "fake"
+    assert "external_links_are_not_prices" in body["warnings"]
+    assert {link["source_id"] for link in body["external_links"]} >= {
+        "aviasales_clickout",
+        "tutu",
+        "yandex_travel",
+    }
+    assert body["external_links"][0]["price_known"] is False
     assert body["offers"][0]["provider_id"] == "fake"
     assert body["offers"][0]["freshness"] == "cached"
     assert body["offers"][0]["requires_live_confirmation"] is True
@@ -83,6 +95,28 @@ def test_search_endpoint_accepts_explicit_passenger_mix() -> None:
     body = response.json()
     assert body["offers"][0]["passengers"] == 3
     assert body["offers"][0]["total_price"]["minor_units"] == 239700
+
+
+def test_search_endpoint_respects_configured_clickout_source_allowlist(monkeypatch) -> None:
+    monkeypatch.setenv("RU_AGGREGATORS_ENABLED", "tutu")
+    monkeypatch.setenv("CARRIER_LINKS_ENABLED", "")
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/api/v1/searches",
+        json={
+            "origin": "WAW",
+            "destination": "BCN",
+            "departure_date": "2026-10-12",
+            "return_date": "2026-10-19",
+            "passengers": 2,
+            "currency": "PLN",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert [link["source_id"] for link in body["external_links"]] == ["tutu"]
 
 
 def test_search_endpoint_rejects_passenger_mix_total_mismatch() -> None:

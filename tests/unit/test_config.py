@@ -37,3 +37,16 @@ def test_load_env_file_sets_missing_values_without_overriding_existing_env(
     assert settings.aviasales_data_enabled
     assert settings.travelpayouts_api_token == "existing-secret"
     assert settings.aviasales_data_default_market == "pl"
+
+
+def test_settings_parse_personal_observer_and_clickout_lists(monkeypatch) -> None:
+    monkeypatch.setenv("PERSONAL_OBSERVER_ALLOWED_HOSTS", "travel.yandex.ru,www.tutu.ru")
+    monkeypatch.setenv("RU_AGGREGATORS_ENABLED", "tutu")
+    monkeypatch.setenv("CARRIER_LINKS_ENABLED", "s7,pobeda")
+
+    settings = AppSettings.from_env()
+
+    assert settings.personal_observer_allowed_hosts == ("travel.yandex.ru", "www.tutu.ru")
+    assert settings.ru_aggregators_enabled == ("tutu",)
+    assert settings.carrier_links_enabled == ("s7", "pobeda")
+    assert settings.ru_clickout_enabled_source_ids == ("tutu", "s7", "pobeda")

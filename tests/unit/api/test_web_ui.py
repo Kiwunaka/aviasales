@@ -44,6 +44,13 @@ def test_root_serves_beginner_friendly_search_screen_without_secrets() -> None:
     assert "Взрослые" in response.text
     assert "Проверить live" in response.text
     assert "ranking_reasons" in response.text
+    assert "priced_offers" in response.text
+    assert "external_links" in response.text
+    assert "browser_observed_offers" in response.text
+    assert "freshness_summary" in response.text
+    assert "Цены из кэша" in response.text
+    assert "Ссылки для проверки" in response.text
+    assert "Свежие наблюдения из браузера" in response.text
     assert "function providerHelp" in response.text
     assert "function syncExtractedRoute" in response.text
     assert "Не подключен" in response.text

@@ -48,8 +48,27 @@ Official references checked on 2026-06-23:
 - Real live automation remains source-by-source work, not a generic hidden scraper.
 - The user can explicitly opt into risky scraping later, but the codebase keeps hard guardrails.
 
+## Implementation note: 2026-06-29
+
+The search API now returns a bundle-shaped result with priced offers, external check links,
+browser-observed offers, deal candidates and a freshness summary. The current RU click-out
+implementation builds conservative HTTPS base links only; it does not fabricate precise deeplinks,
+prices, availability, booking URLs or live observations. `RU_AGGREGATORS_ENABLED` and
+`CARRIER_LINKS_ENABLED` control which external check links are shown, and browser observation remains
+behind explicit user-action policy/config gates.
+
+The fixture parser slice also adds `GenericRuHtmlOfferExtractor`, which reads sanitized HTML with
+explicit offer-card markers into `BrowserObservedOffer` values. It is intentionally offline and does
+not navigate pages, bypass protections, solve CAPTCHA, reuse cookies or infer prices outside an
+offer card.
+
 ## Verification
 
 - `tests/unit/application/test_price_sources.py`
 - `tests/unit/api/test_price_sources_api.py`
 - `tests/unit/application/test_scraping_policy.py`
+- `tests/unit/domain/test_search_results.py`
+- `tests/unit/providers/ru_clickout/test_link_builder.py`
+- `tests/unit/application/test_search_service.py`
+- `tests/unit/api/test_api_app.py`
+- `tests/unit/browser/test_html_offer_extractor.py`

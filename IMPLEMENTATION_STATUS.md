@@ -1209,3 +1209,91 @@ Official Travelpayouts docs checked -> Aviasales Data/Search contract notes reco
     - `uv run ruff check .` -> All checks passed.
     - `uv run mypy` -> Success: no issues found in 56 source files.
     - `uv run alembic upgrade head` -> current SQLite migration head verified.
+
+## Current slice: Bundle search results and RU click-out links
+
+- Goal: make search output match the monster-plan result taxonomy by separating cached/priced
+  offers, external check links, browser-observed offers, deal candidates and freshness summary.
+- Result: implemented for this slice. The full product is not complete.
+- Plan:
+  1. [done] Add domain/API/application tests for `SearchBundle`-style outputs and external links
+     that are never treated as prices.
+  2. [done] Add conservative RU click-out source specs and link builder for aggregators/carriers.
+  3. [done] Wire search responses and the FastAPI-served UI into separate result sections.
+  4. [done] Add safe env flags for personal observer/search helper tooling and configurable
+     click-out source allowlists.
+  5. [done] Run the full quality gate and record final command output.
+- Files/modules:
+  - `src/flight_hunter/domain/search_results.py`
+  - `src/flight_hunter/domain/offers.py`
+  - `src/flight_hunter/providers/ru_clickout`
+  - `src/flight_hunter/application/search_service.py`
+  - `src/flight_hunter/api/app.py`
+  - `src/flight_hunter/api/web.py`
+  - `src/flight_hunter/config.py`
+  - `.env.example`
+  - `.gitignore`
+- ADR/docs:
+  - `docs/adr/0015-rub-clickout-price-observer.md`
+  - `README.md`
+- Tests added/updated:
+  - `tests/unit/domain/test_search_results.py`
+  - `tests/unit/providers/ru_clickout/test_link_builder.py`
+  - `tests/unit/application/test_search_service.py`
+  - `tests/unit/api/test_api_app.py`
+  - `tests/unit/api/test_web_ui.py`
+  - `tests/unit/test_config.py`
+  - `tests/unit/test_env_example.py`
+- Risks:
+  - Personal Browser Observer production runtime, parser pipeline, durable job worker and
+    screenshots/DOM artifact retention are not implemented yet.
+  - RU click-out links are external check links only; they intentionally do not contain fabricated
+    prices, availability, booking URLs or precise deeplinks.
+  - Aviasales Data broader endpoints and real deal feed ingestion remain future slices.
+- Verification:
+  - Targeted:
+    `uv run pytest tests/unit/domain/test_search_results.py tests/unit/providers/ru_clickout/test_link_builder.py tests/unit/application/test_search_service.py tests/unit/api/test_api_app.py tests/unit/api/test_web_ui.py -q`
+    -> 20 passed before env/config follow-up.
+  - Targeted after env/config follow-up:
+    `uv run pytest tests/unit/domain/test_search_results.py tests/unit/providers/ru_clickout/test_link_builder.py tests/unit/application/test_search_service.py tests/unit/api/test_api_app.py tests/unit/api/test_web_ui.py tests/unit/test_config.py tests/unit/test_env_example.py -q`
+    -> 25 passed.
+  - `uv run pytest tests/unit --quiet` -> 178 passed.
+  - `uv run ruff format --check .` -> 129 files already formatted.
+  - `uv run ruff check .` -> All checks passed.
+  - `uv run mypy` -> Success: no issues found in 62 source files.
+  - `uv run alembic upgrade head` -> current SQLite migration head verified.
+
+## Current slice: Sanitized browser HTML offer extractor
+
+- Goal: add the first offline parser pipeline piece for Personal Browser Observer results without
+  doing browser automation, network calls or scraping bypasses.
+- Result: implemented for this slice. The full product is not complete.
+- Plan:
+  1. [done] Add sanitized Tutu-style fixture with an explicit offer-card marker and a nearby
+     non-ticket price.
+  2. [done] Add `DomSnapshot`, `PriceCandidate`, `BrowserExtractionResult` and
+     `GenericRuHtmlOfferExtractor`.
+  3. [done] Parse only explicit `data-flight-offer`/`data-price` card context into
+     `BrowserObservedOffer` with confidence and parser warnings.
+  4. [done] Run the full quality gate and record final command output.
+- Files/modules:
+  - `src/flight_hunter/browser/__init__.py`
+  - `src/flight_hunter/browser/html_extractor.py`
+  - `tests/fixtures/browser/tutu/search_result_sanitized.html`
+  - `tests/unit/browser/test_html_offer_extractor.py`
+- ADR/docs:
+  - `docs/adr/0015-rub-clickout-price-observer.md`
+  - `README.md`
+- Risks:
+  - This is fixture-backed DOM extraction only; it does not include Playwright navigation,
+    persistent browser profiles, Scrapling runtime integration, Crawl4AI extraction, screenshots or
+    durable observer jobs.
+  - The parser intentionally ignores prices outside explicit offer-card context to reduce false
+    positives.
+- Verification:
+  - Targeted: `uv run pytest tests/unit/browser/test_html_offer_extractor.py -q` -> 3 passed.
+  - `uv run pytest tests/unit --quiet` -> 181 passed.
+  - `uv run ruff format --check .` -> 132 files already formatted.
+  - `uv run ruff check .` -> All checks passed.
+  - `uv run mypy` -> Success: no issues found in 64 source files.
+  - `uv run alembic upgrade head` -> current SQLite migration head verified.

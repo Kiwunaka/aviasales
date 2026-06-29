@@ -46,6 +46,13 @@ from flight_hunter.domain.observation import BrowserSource, LiveObservation
 from flight_hunter.domain.offers import FlightOffer, SearchIntent
 from flight_hunter.domain.policy import ExecutionContext
 from flight_hunter.domain.ranking import offer_ranking_key
+from flight_hunter.domain.search_results import (
+    BrowserObservedOffer,
+    Confidence,
+    DealCandidate,
+    ExternalSearchLink,
+    FreshnessSummary,
+)
 from flight_hunter.geo.demo_repository import DemoAirportRepository
 from flight_hunter.notifications.telegram import (
     TelegramWebhookDecisionCode,
@@ -316,6 +323,80 @@ class OfferResponse(BaseModel):
     ranking_reasons: list[str]
 
 
+class ExternalSearchLinkResponse(BaseModel):
+    kind: str
+    source_id: str
+    source_name: str
+    url: str
+    origin: str
+    destination: str
+    departure_date: str
+    return_date: str | None
+    passengers: int
+    adults: int
+    children: int
+    infants: int
+    currency: str
+    source_type: str
+    purchase_flow: str
+    price_known: bool
+    requires_external_confirmation: bool
+    notes_ru: str | None
+    warnings: list[str]
+
+
+class BrowserObservedOfferResponse(BaseModel):
+    kind: str
+    observation_id: str
+    source_id: str
+    source_name: str
+    provider_offer_id: str
+    origin: str
+    destination: str
+    departure_date: str | None
+    return_date: str | None
+    total_price: MoneyResponse | None
+    passengers: int
+    observed_at: str
+    final_url: str
+    display_url: str
+    freshness: str
+    confidence: str
+    parser_version: str
+    parser_warnings: list[str]
+    airline_name: str | None
+    airline_iata: str | None
+    flight_number: str | None
+    departure_time_local: str | None
+    arrival_time_local: str | None
+    duration_minutes: int | None
+    stops: int | None
+    baggage_summary: str | None
+    seller_name: str | None
+    requires_external_confirmation: bool
+
+
+class DealCandidateResponse(BaseModel):
+    kind: str
+    source_id: str
+    url: str
+    title: str
+    summary_ru: str
+    extracted_price: MoneyResponse | None
+    extracted_origin: str | None
+    extracted_destination: str | None
+    extracted_date_window: str | None
+    confidence: str
+    discovered_at: str
+    requires_manual_verification: bool
+
+
+class FreshnessSummaryResponse(BaseModel):
+    best_price_source: str | None
+    freshest_observation_at: str | None
+    needs_external_confirmation: bool
+
+
 class ProviderDenialResponse(BaseModel):
     code: str
     message: str
@@ -324,8 +405,14 @@ class ProviderDenialResponse(BaseModel):
 class SearchResponse(BaseModel):
     search_id: str
     offers: list[OfferResponse]
+    priced_offers: list[OfferResponse]
     provider_isolated_offers: list[OfferResponse]
+    browser_observed_offers: list[BrowserObservedOfferResponse]
+    external_links: list[ExternalSearchLinkResponse]
+    deal_candidates: list[DealCandidateResponse]
     denied_providers: dict[str, ProviderDenialResponse]
+    warnings: list[str]
+    freshness_summary: FreshnessSummaryResponse
 
 
 class LiveObservationGrantRequestBody(BaseModel):
@@ -460,6 +547,7 @@ def create_app(
         registry=registry,
         clock=lambda: datetime.now(UTC),
         providers=provider_instances,
+        enabled_external_source_ids=settings.ru_clickout_enabled_source_ids,
     )
     agent_plan_builder = AgentPlanBuilder()
     airport_service = AirportService(repository=DemoAirportRepository())
@@ -1189,22 +1277,33 @@ def _agent_audit_event_response(event: AgentAuditEvent) -> AgentAuditEventRespon
 
 
 def _search_response(result: SearchResult) -> SearchResponse:
+    priced_offers = [
+        _offer_response(
+            offer,
+            ranking_reasons=result.ranking_reasons.get(offer_ranking_key(offer), ()),
+        )
+        for offer in result.priced_offers
+    ]
     return SearchResponse(
         search_id=result.search_id,
-        offers=[
-            _offer_response(
-                offer,
-                ranking_reasons=result.ranking_reasons.get(offer_ranking_key(offer), ()),
-            )
-            for offer in result.mergeable_offers
-        ],
+        offers=priced_offers,
+        priced_offers=priced_offers,
         provider_isolated_offers=[
             _offer_response(offer, ranking_reasons=()) for offer in result.provider_isolated_offers
+        ],
+        browser_observed_offers=[
+            _browser_observed_offer_response(offer) for offer in result.browser_observed_offers
+        ],
+        external_links=[_external_search_link_response(link) for link in result.external_links],
+        deal_candidates=[
+            _deal_candidate_response(candidate) for candidate in result.deal_candidates
         ],
         denied_providers={
             provider_id: ProviderDenialResponse(code=denial.code, message=denial.message)
             for provider_id, denial in result.denied_providers.items()
         },
+        warnings=list(result.warnings),
+        freshness_summary=_freshness_summary_response(result.freshness_summary),
     )
 
 
@@ -1253,6 +1352,102 @@ def _offer_response(offer: FlightOffer, *, ranking_reasons: tuple[str, ...]) -> 
         baggage_summary=offer.baggage_summary,
         ranking_reasons=list(ranking_reasons),
     )
+
+
+def _external_search_link_response(link: ExternalSearchLink) -> ExternalSearchLinkResponse:
+    return ExternalSearchLinkResponse(
+        kind=link.kind.value,
+        source_id=link.source_id,
+        source_name=link.source_name,
+        url=link.url,
+        origin=link.origin,
+        destination=link.destination,
+        departure_date=link.departure_date,
+        return_date=link.return_date,
+        passengers=link.passengers,
+        adults=link.adults,
+        children=link.children,
+        infants=link.infants,
+        currency=link.currency,
+        source_type=link.source_type,
+        purchase_flow=link.purchase_flow,
+        price_known=link.price_known,
+        requires_external_confirmation=link.requires_external_confirmation,
+        notes_ru=link.notes_ru,
+        warnings=list(link.warnings),
+    )
+
+
+def _browser_observed_offer_response(
+    offer: BrowserObservedOffer,
+) -> BrowserObservedOfferResponse:
+    return BrowserObservedOfferResponse(
+        kind=offer.kind.value,
+        observation_id=str(offer.observation_id),
+        source_id=offer.source_id,
+        source_name=offer.source_name,
+        provider_offer_id=offer.provider_offer_id,
+        origin=offer.origin,
+        destination=offer.destination,
+        departure_date=offer.departure_date,
+        return_date=offer.return_date,
+        total_price=_money_response(offer.total_price) if offer.total_price is not None else None,
+        passengers=offer.passengers,
+        observed_at=offer.observed_at.isoformat(),
+        final_url=offer.final_url,
+        display_url=offer.display_url,
+        freshness=offer.freshness.value,
+        confidence=_confidence_value(offer.confidence),
+        parser_version=offer.parser_version,
+        parser_warnings=list(offer.parser_warnings),
+        airline_name=offer.airline_name,
+        airline_iata=offer.airline_iata,
+        flight_number=offer.flight_number,
+        departure_time_local=offer.departure_time_local,
+        arrival_time_local=offer.arrival_time_local,
+        duration_minutes=offer.duration_minutes,
+        stops=offer.stops,
+        baggage_summary=offer.baggage_summary,
+        seller_name=offer.seller_name,
+        requires_external_confirmation=offer.requires_external_confirmation,
+    )
+
+
+def _deal_candidate_response(candidate: DealCandidate) -> DealCandidateResponse:
+    return DealCandidateResponse(
+        kind=candidate.kind.value,
+        source_id=candidate.source_id,
+        url=candidate.url,
+        title=candidate.title,
+        summary_ru=candidate.summary_ru,
+        extracted_price=(
+            _money_response(candidate.extracted_price)
+            if candidate.extracted_price is not None
+            else None
+        ),
+        extracted_origin=candidate.extracted_origin,
+        extracted_destination=candidate.extracted_destination,
+        extracted_date_window=candidate.extracted_date_window,
+        confidence=_confidence_value(candidate.confidence),
+        discovered_at=candidate.discovered_at.isoformat(),
+        requires_manual_verification=candidate.requires_manual_verification,
+    )
+
+
+def _freshness_summary_response(summary: FreshnessSummary) -> FreshnessSummaryResponse:
+    return FreshnessSummaryResponse(
+        best_price_source=summary.best_price_source,
+        freshest_observation_at=(
+            summary.freshest_observation_at.isoformat()
+            if summary.freshest_observation_at is not None
+            else None
+        ),
+        needs_external_confirmation=summary.needs_external_confirmation,
+    )
+
+
+def _confidence_value(confidence: Confidence | str) -> str:
+    return Confidence(confidence).value
 
 
 def _money_response(money: Money) -> MoneyResponse:

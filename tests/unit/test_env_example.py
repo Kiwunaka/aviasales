@@ -24,3 +24,12 @@ def test_env_example_exists_with_safe_placeholders() -> None:
     assert "LIVE_REFRESH_MIN_GAP_SECONDS=600" in content
     assert "SCRAPING_OBSERVER_ENABLED=false" in content
     assert "SCRAPING_MIN_GAP_SECONDS=600" in content
+    assert "PERSONAL_OBSERVER_ENABLED=false" in content
+    assert "PERSONAL_OBSERVER_REQUIRE_USER_ACTION=true" in content
+    assert "PERSONAL_OBSERVER_AUTO_RUN=false" in content
+    assert "SCRAPLING_USE_FETCHERS=false" in content
+    assert "CRAWL4AI_ENABLED=false" in content
+    assert "SEARXNG_ENABLED=false" in content
+    assert "RU_AGGREGATORS_ENABLED=aviasales_clickout,yandex_travel,tutu,onetwotrip" in content
+    assert "CARRIER_LINKS_ENABLED=aeroflot,pobeda,s7" in content
+    assert "SOURCE_INTERNAL_RPM=10" in content

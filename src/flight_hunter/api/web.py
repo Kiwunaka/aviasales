@@ -662,7 +662,7 @@ def render_index_html() -> str:
         <div class="panel-header">
           <div>
             <h2 class="panel-title" id="results-heading">Результаты</h2>
-            <div class="panel-kicker">Цена всегда показывает источник, свежесть и число пассажиров.</div>
+            <div class="panel-kicker">Цены из кэша, ссылки для проверки и свежие наблюдения из браузера показываются отдельно.</div>
           </div>
           <span class="small" id="results-count">0 вариантов</span>
         </div>
@@ -918,12 +918,38 @@ def render_index_html() -> str:
       });
     }
 
+    function appendSectionHeader(container, title, subtitle) {
+      const node = document.createElement("div");
+      node.className = "denial-row";
+      const strong = document.createElement("strong");
+      strong.textContent = title;
+      const meta = document.createElement("div");
+      meta.className = "small";
+      meta.textContent = subtitle;
+      node.append(strong, document.createTextNode("\\n"), meta);
+      container.append(node);
+    }
+
     function renderResults(body) {
-      const offers = body.offers || [];
+      const offers = body.priced_offers || body.offers || [];
+      const externalLinks = body.external_links || [];
+      const observedOffers = body.browser_observed_offers || [];
+      const dealCandidates = body.deal_candidates || [];
+      const freshnessSummary = body.freshness_summary || {};
       resultsList.replaceChildren();
       liveList.replaceChildren();
       denialsList.replaceChildren();
-      resultsCount.textContent = optionCountLabel(offers.length);
+      resultsCount.textContent = optionCountLabel(
+        offers.length + externalLinks.length + observedOffers.length
+      );
+
+      appendSectionHeader(
+        resultsList,
+        "Цены из кэша",
+        freshnessSummary.needs_external_confirmation
+          ? "Нужна внешняя проверка перед покупкой."
+          : "Свежесть подтверждена источником."
+      );
 
       if (offers.length === 0) {
         const empty = document.createElement("div");
@@ -960,6 +986,74 @@ def render_index_html() -> str:
         row.querySelector(".live-check-button").addEventListener("click", () => runLiveCheck());
         resultsList.append(row);
       });
+
+      appendSectionHeader(
+        resultsList,
+        "Ссылки для проверки",
+        "Это внешние сайты, не найденные цены. Откройте и проверьте маршрут вручную."
+      );
+      if (externalLinks.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty-state";
+        empty.textContent = "Пока нет внешних ссылок для проверки.";
+        resultsList.append(empty);
+      }
+      externalLinks.forEach((link) => {
+        const row = document.createElement("div");
+        row.className = "result-row";
+        row.innerHTML = `
+          <div>
+            <div class="route"></div>
+            <div class="small"></div>
+          </div>
+          <div class="price">Цена неизвестна</div>
+          <div>
+            <div class="caveats"><span class="badge warn">external check</span></div>
+            <a class="secondary" target="_blank" rel="noopener noreferrer">Открыть на сайте</a>
+          </div>
+        `;
+        row.querySelector(".route").textContent =
+          `${link.source_name}: ${link.origin} -> ${link.destination}`;
+        row.querySelector(".small").textContent =
+          `${link.departure_date}${link.return_date ? " — " + link.return_date : ""}`
+          + ` · ${link.passengers} пасс. · ${link.notes_ru || "Проверить на внешнем сайте."}`;
+        row.querySelector("a").href = link.url;
+        resultsList.append(row);
+      });
+
+      appendSectionHeader(
+        liveList,
+        "Свежие наблюдения из браузера",
+        "Personal Browser Observer запускается только после явного действия пользователя."
+      );
+      if (observedOffers.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty-state";
+        empty.textContent = "Пока нет browser observation по этому запросу.";
+        liveList.append(empty);
+      }
+      observedOffers.forEach((offer) => {
+        const row = document.createElement("div");
+        row.className = "denial-row small";
+        row.textContent =
+          `${offer.source_name}: ${offer.total_price ? offer.total_price.formatted : "цена не найдена"}`
+          + ` · confidence=${offer.confidence} · ${offer.parser_warnings.join(", ") || "без предупреждений"}`;
+        liveList.append(row);
+      });
+
+      if (dealCandidates.length > 0) {
+        appendSectionHeader(
+          denialsList,
+          "Сделки/форумы",
+          "Кандидаты требуют ручной проверки и не считаются источником истины цены."
+        );
+        dealCandidates.forEach((candidate) => {
+          const row = document.createElement("div");
+          row.className = "denial-row small";
+          row.textContent = `${candidate.title}: ${candidate.summary_ru}`;
+          denialsList.append(row);
+        });
+      }
 
       Object.entries(body.denied_providers || {}).forEach(([providerId, denial]) => {
         const row = document.createElement("div");

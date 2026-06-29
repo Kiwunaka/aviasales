@@ -56,6 +56,13 @@
 - durable live observation storage and retention cleanup for short-lived grants/results/idempotency;
 - price source catalog: RUB-first источники без брони в приложении, с покупкой
   через внешний click-out;
+- search response bundle: `priced_offers`, `external_links`, `browser_observed_offers`,
+  `deal_candidates` и `freshness_summary` разделяют кэшированные цены, внешние ссылки для
+  проверки и будущие наблюдения из браузера;
+- web UI показывает отдельные секции "Цены из кэша", "Ссылки для проверки" и
+  "Свежие наблюдения из браузера", не смешивая внешние ссылки с найденными билетами;
+- fixture-based browser HTML extractor: sanitized DOM fixtures can be parsed into
+  `BrowserObservedOffer` with confidence/warnings, without network calls or stealth scraping;
 - scraping observer policy: рискованный future-режим выключен по умолчанию и
   запрещает CAPTCHA/stealth/proxy/cookie обходы;
 - Aviasales Search API и MCP policy skeletons: выключены по умолчанию, требуют
@@ -117,10 +124,10 @@ uv run flight-hunter-import-airports --airports-csv .\data\airports.csv
 Последний проверенный результат:
 
 ```text
-168 passed
+181 passed
 ruff format/check passed
 mypy passed
-migration upgraded through 0006
+alembic upgrade head passed
 ```
 
 ## Что пока не готово
@@ -130,7 +137,11 @@ migration upgraded through 0006
 Остальные источники теперь явно отражены в source contract catalog как `policy_skeleton` или
 `contract_only`, а не замаскированы под рабочие интеграции.
 
-Scraping, CAPTCHA bypass, stealth, fingerprint spoofing и rotating proxies не используются.
+Flight Hunter по умолчанию не делает скрытый массовый scraping и не использует CAPTCHA bypass,
+stealth, fingerprint spoofing, rotating proxies, чужие cookies или login-required страницы.
+Personal Browser Observer пока представлен policy/config/control-plane слоем и UI/result-моделью:
+production runtime и durable browser job worker ещё не реализованы. Уже есть fixture-based HTML
+extractor для sanitized DOM, но он не выполняет навигацию и не собирает страницы сам.
 
 Live-цены не парсятся "втихую" со страниц агрегаторов. Для них нужен официальный
 API/партнерский доступ, включенный provider adapter и пользовательское действие.

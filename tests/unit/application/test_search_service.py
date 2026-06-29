@@ -34,6 +34,16 @@ def test_demo_search_returns_cached_offer_with_caveats() -> None:
     assert result.mergeable_offers[0].freshness == Freshness.CACHED
     assert result.mergeable_offers[0].requires_live_confirmation
     assert result.provider_isolated_offers == ()
+    assert result.priced_offers == result.mergeable_offers
+    assert {link.source_id for link in result.external_links} >= {
+        "aviasales_clickout",
+        "tutu",
+        "yandex_travel",
+    }
+    assert result.browser_observed_offers == ()
+    assert result.deal_candidates == ()
+    assert result.freshness_summary.needs_external_confirmation is True
+    assert "external_links_are_not_prices" in result.warnings
     assert "aviasales_search" in result.denied_providers
 
 
